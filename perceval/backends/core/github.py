@@ -33,6 +33,7 @@
 import datetime
 import json
 import logging
+import random
 
 import jwt
 import requests
@@ -674,6 +675,8 @@ class GitHubClient(HttpClient, RateLimitHandler):
         self.repository = repository
         self.tokens = tokens
         if self.tokens:
+            # Randomly shuffle the token pool to avoid choosing the same token during concurrent scheduling.
+            self.tokens = random.sample(tokens, len(tokens))
             self.n_tokens = len(self.tokens)
         else:
             self.n_tokens = 0

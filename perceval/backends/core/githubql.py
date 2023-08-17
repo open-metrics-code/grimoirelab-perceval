@@ -48,7 +48,13 @@ EVENT_TYPES = [
     'CROSS_REFERENCED_EVENT',
     'LABELED_EVENT',
     'UNLABELED_EVENT',
-    'CLOSED_EVENT'
+    'CLOSED_EVENT',
+    'REOPENED_EVENT',
+    'ASSIGNED_EVENT',
+    'LOCKED_EVENT',
+    'MILESTONED_EVENT',
+    'MARKED_AS_DUPLICATE_EVENT',
+    'TRANSFERRED_EVENT'
 ]
 
 MERGED_EVENT = 'MERGED_EVENT'
@@ -239,6 +245,119 @@ QUERY_TEMPLATE = """
                     state
                   }
                 }
+                ... on ReopenedEvent {
+                  actor {
+                    login
+                  }
+                  id
+                  createdAt
+                  stateReason
+                  closable {
+                    closed
+                    closedAt
+                    viewerCanClose
+                    viewerCanReopen
+                  }
+                }
+                ... on AssignedEvent {
+                  actor {
+                    login
+                  }
+                  assignable {
+                    assignees(first: 100) {
+                      edges {
+                        node {
+                          id
+                          login
+                        }
+                      }
+                    }
+                  }
+                  id
+                  createdAt
+                }
+                ... on LockedEvent {
+                  actor {        
+                    login   
+                  }
+                  id
+                  createdAt
+                  lockReason
+                  lockable{
+                    locked
+                    activeLockReason
+                  }
+                }
+                ... on MilestonedEvent {
+                  actor {        
+                    login
+                  }
+                  id
+                  createdAt
+                  milestoneTitle
+                  subject {
+                    __typename
+                    ... on Issue {
+                      number
+                      url
+                      createdAt
+                      updatedAt
+                      closed
+                      closedAt
+                    }
+                    ... on PullRequest {
+                      number
+                      url
+                      createdAt
+                      updatedAt
+                      closed
+                      closedAt
+                      merged
+                      mergedAt
+                    }
+                  }
+                }  
+                ... on MarkedAsDuplicateEvent {
+                  actor {        
+                    login
+                  }
+                  id
+                  createdAt
+                  canonical{
+                    __typename
+                        ... on Issue {
+                          number
+                          url
+                          createdAt
+                          updatedAt
+                          closed
+                          closedAt
+                        }
+                        ... on PullRequest {
+                          number
+                          url
+                          createdAt
+                          updatedAt
+                          closed
+                          closedAt
+                          merged
+                          mergedAt
+                        }
+                  }
+                  isCrossRepository
+                }
+                ... on TransferredEvent {
+                  actor {        
+                    login
+                  }
+                  id
+                  createdAt
+                  fromRepository {
+                    id
+                    url
+                    name
+                  }
+                } 
                 %s
                 %s
               }

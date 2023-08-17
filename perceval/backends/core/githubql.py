@@ -38,6 +38,8 @@ from ...client import HttpClient
 from ...utils import DEFAULT_DATETIME, DEFAULT_LAST_DATETIME
 
 CATEGORY_EVENT = "event"
+CATEGORY_STARGAZER = "stargazer"
+CATEGORY_FORK = "fork"
 
 GITHUB_API_URL = "https://api.github.com"
 
@@ -48,7 +50,13 @@ EVENT_TYPES = [
     'CROSS_REFERENCED_EVENT',
     'LABELED_EVENT',
     'UNLABELED_EVENT',
-    'CLOSED_EVENT'
+    'CLOSED_EVENT',
+    'REOPENED_EVENT',
+    'ASSIGNED_EVENT',
+    'LOCKED_EVENT',
+    'MILESTONED_EVENT',
+    'MARKED_AS_DUPLICATE_EVENT',
+    'TRANSFERRED_EVENT'
 ]
 
 MERGED_EVENT = 'MERGED_EVENT'
@@ -239,6 +247,119 @@ QUERY_TEMPLATE = """
                     state
                   }
                 }
+                ... on ReopenedEvent {
+                  actor {
+                    login
+                  }
+                  id
+                  createdAt
+                  stateReason
+                  closable {
+                    closed
+                    closedAt
+                    viewerCanClose
+                    viewerCanReopen
+                  }
+                }
+                ... on AssignedEvent {
+                  actor {
+                    login
+                  }
+                  assignable {
+                    assignees(first: 100) {
+                      edges {
+                        node {
+                          id
+                          login
+                        }
+                      }
+                    }
+                  }
+                  id
+                  createdAt
+                }
+                ... on LockedEvent {
+                  actor {        
+                    login   
+                  }
+                  id
+                  createdAt
+                  lockReason
+                  lockable{
+                    locked
+                    activeLockReason
+                  }
+                }
+                ... on MilestonedEvent {
+                  actor {        
+                    login
+                  }
+                  id
+                  createdAt
+                  milestoneTitle
+                  subject {
+                    __typename
+                    ... on Issue {
+                      number
+                      url
+                      createdAt
+                      updatedAt
+                      closed
+                      closedAt
+                    }
+                    ... on PullRequest {
+                      number
+                      url
+                      createdAt
+                      updatedAt
+                      closed
+                      closedAt
+                      merged
+                      mergedAt
+                    }
+                  }
+                }  
+                ... on MarkedAsDuplicateEvent {
+                  actor {        
+                    login
+                  }
+                  id
+                  createdAt
+                  canonical{
+                    __typename
+                        ... on Issue {
+                          number
+                          url
+                          createdAt
+                          updatedAt
+                          closed
+                          closedAt
+                        }
+                        ... on PullRequest {
+                          number
+                          url
+                          createdAt
+                          updatedAt
+                          closed
+                          closedAt
+                          merged
+                          mergedAt
+                        }
+                  }
+                  isCrossRepository
+                }
+                ... on TransferredEvent {
+                  actor {        
+                    login
+                  }
+                  id
+                  createdAt
+                  fromRepository {
+                    id
+                    url
+                    name
+                  }
+                } 
                 %s
                 %s
               }
@@ -251,6 +372,55 @@ QUERY_TEMPLATE = """
       }
     }
     """
+
+
+QUERY_STARGAZERS_TEMPLATE = """
+{ 
+ repository(owner: "%s", name: "%s"){  
+    stargazers(first: %s, after: %s) {
+      edges {
+        node {
+          id
+          login
+          name
+          email
+          company
+        }
+        starredAt
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+"""
+
+
+QUERY_FORKS_TEMPLATE = """
+{ 
+ repository(owner: "%s", name:"%s"){
+    forks(first: %s, after: %s) {
+      edges {
+        node {
+          id
+          url
+          createdAt
+          owner {
+            id
+            login
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+"""
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +479,7 @@ class GitHubQL(GitHub):
     """
     version = '0.4.0'
 
-    CATEGORIES = [CATEGORY_EVENT]
+    CATEGORIES = [CATEGORY_EVENT, CATEGORY_STARGAZER, CATEGORY_FORK]
 
     def __init__(self, owner=None, repository=None,
                  api_token=None, github_app_id=None, github_app_pk_filepath=None,
@@ -361,8 +531,13 @@ class GitHubQL(GitHub):
         from_date = kwargs['from_date']
         to_date = kwargs['to_date']
 
-        items = self.__fetch_events(from_date, to_date)
-
+        if category == CATEGORY_EVENT:
+          items = self.__fetch_events(from_date, to_date)
+        elif category == CATEGORY_STARGAZER:
+          items = self.__fetch_stargazers(to_date)
+        elif category == CATEGORY_FORK:
+          items = self.__fetch_forks(to_date)
+          
         return items
 
     @classmethod
@@ -403,7 +578,16 @@ class GitHubQL(GitHub):
         This backend generates one type item which is
         'event'.
         """
-        return CATEGORY_EVENT
+        if item.get('category') is None: 
+          category = CATEGORY_EVENT
+        elif item['category'] == CATEGORY_STARGAZER:
+          category = CATEGORY_STARGAZER
+        elif item['category'] == CATEGORY_FORK:
+          category = CATEGORY_FORK
+        else:
+          category = CATEGORY_EVENT
+
+        return category
 
     def _init_client(self, from_archive=False):
         """Init client"""
@@ -435,6 +619,32 @@ class GitHubQL(GitHub):
                         event['issue'] = issue
                         yield event
 
+    def __fetch_stargazers(self, to_date):
+      """ Fetch the stargazers """
+      stargazers_groups = self.client.stargazers()
+      for stargazers in stargazers_groups:
+        for stargazer in stargazers:
+
+            if str_to_datetime(stargazer['starredAt']) > to_date:
+                return
+            stargazer_node = stargazer["node"]
+            stargazer_node['starredAt'] = stargazer['starredAt']
+            stargazer_node['createdAt'] = stargazer['starredAt']
+            stargazer_node['category'] = CATEGORY_STARGAZER
+            yield stargazer_node
+
+
+    def __fetch_forks(self, to_date):
+      """ Fetch the fork """
+      forks_groups = self.client.forks()
+      for forks in forks_groups:
+        for fork in forks:
+
+            if str_to_datetime(fork["node"]['createdAt']) > to_date:
+                return
+            fork_node = fork["node"]
+            fork_node['category'] = CATEGORY_FORK
+            yield fork_node
 
 class GitHubQLClient(GitHubClient):
     """Client for retrieving information from GitHub API
@@ -520,6 +730,54 @@ class GitHubQLClient(GitHubClient):
             query = QUERY_TEMPLATE % (self.owner, self.repository, node_type, issue_number, self.VPER_PAGE,
                                       '"{}"'.format(next_cursor), event_types, from_date.isoformat(),
                                       query_merged_event, query_pull_request_reviews_event)
+      
+
+    def stargazers(self):
+      """ Get the stargazers of the repository from the GraphQL API """
+      query = QUERY_STARGAZERS_TEMPLATE % (self.owner, self.repository, self.VPER_PAGE, "null")
+      has_next = True
+      while has_next:
+          response = self.fetch(self.graphql_url, payload=json.dumps({'query': query}), method=HttpClient.POST)
+
+          items = response.json()
+          if 'errors' in items:
+              logger.error("Stargazers not collected  in %s/%s due to: %s" %
+                            (self.owner, self.repository, items['errors'][0]['message']))
+              return []
+
+          stargazers = items['data']['repository']['stargazers']
+          edges = stargazers['edges']
+          yield edges
+
+          page = stargazers['pageInfo']
+          has_next = page['hasNextPage']
+          next_cursor = page['endCursor']
+
+          query = QUERY_STARGAZERS_TEMPLATE % (self.owner, self.repository, self.VPER_PAGE, '"{}"'.format(next_cursor))
+
+    
+    def forks(self):
+      """ Get the forks of the repository from the GraphQL API """
+      query = QUERY_FORKS_TEMPLATE % (self.owner, self.repository, self.VPER_PAGE, "null")
+      has_next = True
+      while has_next:
+          response = self.fetch(self.graphql_url, payload=json.dumps({'query': query}), method=HttpClient.POST)
+
+          items = response.json()
+          if 'errors' in items:
+              logger.error("Forks not collected  in %s/%s due to: %s" %
+                            (self.owner, self.repository, items['errors'][0]['message']))
+              return []
+
+          stargazers = items['data']['repository']['forks']
+          edges = stargazers['edges']
+          yield edges
+
+          page = stargazers['pageInfo']
+          has_next = page['hasNextPage']
+          next_cursor = page['endCursor']
+
+          query = QUERY_FORKS_TEMPLATE % (self.owner, self.repository, self.VPER_PAGE, '"{}"'.format(next_cursor))
 
 
 class GitHubQLCommand(GitHubCommand):

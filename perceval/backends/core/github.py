@@ -383,6 +383,10 @@ class GitHub(Backend):
             
         repo['releases'] = repo_releases
 
+        repo['archivedAt'] = None
+        if 'archived' in repo and repo['archived']:
+            repo['archivedAt'] = self.client.repo_archived_at()
+            
         fetched_on = datetime_utcnow()
         repo['fetched_on'] = fetched_on.timestamp()
 
@@ -814,6 +818,29 @@ class GitHubClient(HttpClient, RateLimitHandler):
 
         path = urijoin(self.RELEASES)
         return self.fetch_items(path, payload)
+
+    def repo_archived_at(self):
+        """ Get repository archived_at data """
+        graphql_url = "https://api.github.com/graphql" 
+        QUERY_REPO_TEMPLATE = """
+            { 
+                repository(owner: "%s", name: "%s"){  
+                    url      
+                    archivedAt      
+                    createdAt
+                }
+            }
+        """
+        query = QUERY_REPO_TEMPLATE % (self.owner, self.repository)
+        response = self.fetch(graphql_url, payload=json.dumps({'query': query}), method=HttpClient.POST)
+        items = response.json()
+        if 'errors' in items:
+            logger.error("Repo not collected  in %s/%s due to: %s" %
+                        (self.owner, self.repository, items['errors'][0]['message']))
+            return None
+        archived_at = items['data']['repository']['archivedAt']
+        return archived_at
+        
 
     def pull_requested_reviewers(self, pr_number):
         """Get pull requested reviewers"""

@@ -601,7 +601,7 @@ class GitHubQL(GitHub):
     def __fetch_events(self, from_date, to_date):
         """Fetch the events declared at EVENT_TYPES for issues (including pull requests)"""
 
-        issues_groups = self.client.issues()
+        issues_groups = self.client.issues(from_date=from_date)
 
         for raw_issues in issues_groups:
             issues = json.loads(raw_issues)

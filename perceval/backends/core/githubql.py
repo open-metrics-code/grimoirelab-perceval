@@ -53,9 +53,12 @@ EVENT_TYPES = [
     'CLOSED_EVENT',
     'REOPENED_EVENT',
     'ASSIGNED_EVENT',
+    'UNASSIGNED_EVENT',
     'MILESTONED_EVENT',
+    'DEMILESTONED_EVENT',
     'MARKED_AS_DUPLICATE_EVENT',
-    'TRANSFERRED_EVENT'
+    'TRANSFERRED_EVENT',
+    'RENAMED_TITLE_EVENT'
 ]
 
 MERGED_EVENT = 'MERGED_EVENT'
@@ -264,14 +267,25 @@ QUERY_TEMPLATE = """
                   actor {
                     login
                   }
-                  assignable {
-                    assignees(first: 100) {
-                      edges {
-                        node {
-                          id
-                          login
-                        }
-                      }
+                  assignee{
+                    User:  __typename
+                    ... on User{
+                      id
+                      login
+                    }
+                  }
+                  id
+                  createdAt
+                }
+                ... on UnassignedEvent{
+                  actor{
+                    login
+                  }
+                  assignee{
+                    User:  __typename
+                    ... on User{
+                      id
+                      login
                     }
                   }
                   id
@@ -306,6 +320,35 @@ QUERY_TEMPLATE = """
                     }
                   }
                 }  
+                ... on DemilestonedEvent{
+                  actor{
+                    login
+                  }
+                  id
+                  createdAt
+                  milestoneTitle
+                  subject {
+                    __typename
+                    ... on Issue {
+                      number
+                      url
+                      createdAt
+                      updatedAt
+                      closed
+                      closedAt
+                    }
+                    ... on PullRequest {
+                      number
+                      url
+                      createdAt
+                      updatedAt
+                      closed
+                      closedAt
+                      merged
+                      mergedAt
+                    }
+                  }
+                }
                 ... on MarkedAsDuplicateEvent {
                   actor {        
                     login
@@ -347,6 +390,15 @@ QUERY_TEMPLATE = """
                     name
                   }
                 } 
+                ... on RenamedTitleEvent{
+                actor{
+                  login
+                }
+                id
+                createdAt
+                currentTitle
+                previousTitle
+              }
                 %s
                 %s
               }

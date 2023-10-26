@@ -53,7 +53,6 @@ EVENT_TYPES = [
     'CLOSED_EVENT',
     'REOPENED_EVENT',
     'ASSIGNED_EVENT',
-    'LOCKED_EVENT',
     'MILESTONED_EVENT',
     'MARKED_AS_DUPLICATE_EVENT',
     'TRANSFERRED_EVENT'
@@ -277,18 +276,6 @@ QUERY_TEMPLATE = """
                   }
                   id
                   createdAt
-                }
-                ... on LockedEvent {
-                  actor {        
-                    login   
-                  }
-                  id
-                  createdAt
-                  lockReason
-                  lockable{
-                    locked
-                    activeLockReason
-                  }
                 }
                 ... on MilestonedEvent {
                   actor {        

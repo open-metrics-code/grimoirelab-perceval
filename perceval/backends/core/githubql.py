@@ -53,10 +53,12 @@ EVENT_TYPES = [
     'CLOSED_EVENT',
     'REOPENED_EVENT',
     'ASSIGNED_EVENT',
-    'LOCKED_EVENT',
+    'UNASSIGNED_EVENT',
     'MILESTONED_EVENT',
+    'DEMILESTONED_EVENT',
     'MARKED_AS_DUPLICATE_EVENT',
-    'TRANSFERRED_EVENT'
+    'TRANSFERRED_EVENT',
+    'RENAMED_TITLE_EVENT'
 ]
 
 MERGED_EVENT = 'MERGED_EVENT'
@@ -265,30 +267,29 @@ QUERY_TEMPLATE = """
                   actor {
                     login
                   }
-                  assignable {
-                    assignees(first: 100) {
-                      edges {
-                        node {
-                          id
-                          login
-                        }
-                      }
+                  assignee{
+                    User:  __typename
+                    ... on User{
+                      id
+                      login
                     }
                   }
                   id
                   createdAt
                 }
-                ... on LockedEvent {
-                  actor {        
-                    login   
+                ... on UnassignedEvent{
+                  actor{
+                    login
+                  }
+                  assignee{
+                    User:  __typename
+                    ... on User{
+                      id
+                      login
+                    }
                   }
                   id
                   createdAt
-                  lockReason
-                  lockable{
-                    locked
-                    activeLockReason
-                  }
                 }
                 ... on MilestonedEvent {
                   actor {        
@@ -319,6 +320,35 @@ QUERY_TEMPLATE = """
                     }
                   }
                 }  
+                ... on DemilestonedEvent{
+                  actor{
+                    login
+                  }
+                  id
+                  createdAt
+                  milestoneTitle
+                  subject {
+                    __typename
+                    ... on Issue {
+                      number
+                      url
+                      createdAt
+                      updatedAt
+                      closed
+                      closedAt
+                    }
+                    ... on PullRequest {
+                      number
+                      url
+                      createdAt
+                      updatedAt
+                      closed
+                      closedAt
+                      merged
+                      mergedAt
+                    }
+                  }
+                }
                 ... on MarkedAsDuplicateEvent {
                   actor {        
                     login
@@ -360,6 +390,15 @@ QUERY_TEMPLATE = """
                     name
                   }
                 } 
+                ... on RenamedTitleEvent{
+                actor{
+                  login
+                }
+                id
+                createdAt
+                currentTitle
+                previousTitle
+              }
                 %s
                 %s
               }
@@ -601,7 +640,7 @@ class GitHubQL(GitHub):
     def __fetch_events(self, from_date, to_date):
         """Fetch the events declared at EVENT_TYPES for issues (including pull requests)"""
 
-        issues_groups = self.client.issues()
+        issues_groups = self.client.issues(from_date=from_date)
 
         for raw_issues in issues_groups:
             issues = json.loads(raw_issues)

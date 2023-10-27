@@ -308,33 +308,30 @@ class GitHub(Backend):
     def __fetch_issues(self, from_date, to_date):
         """Fetch the issues"""
 
-        issues_groups = self.client.issues(from_date=from_date)
+        raw_issues = self.client.only_issues(from_date=from_date)
+        for issue in raw_issues:
 
-        for raw_issues in issues_groups:
-            issues = json.loads(raw_issues)
-            for issue in issues:
+            if str_to_datetime(issue['updated_at']) > to_date:
+                return
 
-                if str_to_datetime(issue['updated_at']) > to_date:
-                    return
+            self.__init_extra_issue_fields(issue)
+            for field in TARGET_ISSUE_FIELDS:
+                if not issue[field]:
+                    continue
 
-                self.__init_extra_issue_fields(issue)
-                for field in TARGET_ISSUE_FIELDS:
-                    if not issue[field]:
-                        continue
+                if field == 'user':
+                    issue[field + '_data'] = self.__get_user(issue[field]['login'])
+                elif field == 'assignee':
+                    issue[field + '_data'] = self.__get_issue_assignee(issue[field])
+                elif field == 'assignees':
+                    issue[field + '_data'] = self.__get_issue_assignees(issue[field])
+                elif field == 'comments':
+                    issue[field + '_data'] = self.__get_issue_comments(issue['number'])
+                elif field == 'reactions':
+                    issue[field + '_data'] = \
+                        self.__get_issue_reactions(issue['number'], issue['reactions']['total_count'])
 
-                    if field == 'user':
-                        issue[field + '_data'] = self.__get_user(issue[field]['login'])
-                    elif field == 'assignee':
-                        issue[field + '_data'] = self.__get_issue_assignee(issue[field])
-                    elif field == 'assignees':
-                        issue[field + '_data'] = self.__get_issue_assignees(issue[field])
-                    elif field == 'comments':
-                        issue[field + '_data'] = self.__get_issue_comments(issue['number'])
-                    elif field == 'reactions':
-                        issue[field + '_data'] = \
-                            self.__get_issue_reactions(issue['number'], issue['reactions']['total_count'])
-
-                yield issue
+            yield issue
 
     def __fetch_pull_requests(self, from_date, to_date):
         """Fetch the pull requests"""
@@ -773,6 +770,26 @@ class GitHubClient(HttpClient, RateLimitHandler):
 
         path = urijoin(self.RISSUES)
         return self.fetch_items(path, payload)
+    
+    def only_issues(self, from_date=None):
+        """Fetch the only issues(pull requests not included) from the repository.
+
+        The method retrieves, from a GitHub repository, the issues
+        updated since the given date.
+
+        :param from_date: obtain issues updated since this date
+
+        :returns: a generator of issues
+        """
+        issues_groups = self.issues(from_date=from_date)
+
+        for raw_issues in issues_groups:
+            issues = json.loads(raw_issues)
+            for issue in issues:
+
+                if "pull_request" in issue:
+                    continue
+                yield issue
 
     def pulls(self, from_date=None):
         """Fetch the pull requests from the repository.

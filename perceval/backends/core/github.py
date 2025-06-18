@@ -1006,7 +1006,7 @@ class GitHubClient(HttpClient, RateLimitHandler):
         """Return the items from github API using links pagination"""
 
         page = 0  # current page
-        last_page = None  # last page
+        last_page = 1  # last page
         url_next = urijoin(self.base_url, self.RREPOS, self.owner, self.repository, path)
         logger.debug("Get GitHub paginated items from " + url_next)
 

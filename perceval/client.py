@@ -236,7 +236,7 @@ class RateLimitHandler:
     """
     version = '0.2'
 
-    MIN_RATE_LIMIT = 10
+    MIN_RATE_LIMIT = 500
     MAX_RATE_LIMIT = 500
     RATE_LIMIT_HEADER = "X-RateLimit-Remaining"
     RATE_LIMIT_RESET_HEADER = "X-RateLimit-Reset"

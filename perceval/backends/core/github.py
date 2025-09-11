@@ -60,7 +60,7 @@ GITHUB_APP_ACCESS_TOKEN = 'access_tokens'
 GITHUB_APP_INSTALLATION_REPOSITORIES = 'installation/repositories'
 
 # Range before sleeping until rate limit reset
-MIN_RATE_LIMIT = 10
+MIN_RATE_LIMIT = 500
 MAX_RATE_LIMIT = 500
 # Use this factor of the current token's remaining API points before switching to the next token
 TOKEN_USAGE_BEFORE_SWITCH = 0.1
@@ -984,22 +984,20 @@ class GitHubClient(HttpClient, RateLimitHandler):
 
         :returns a response object
         """
+        
         if not self.from_archive:
-            self.sleep_for_rate_limit()
-
-        if not self.from_archive:
-            if self._need_check_tokens() and self.sleep_for_rate and self.github_app_id:
+            if self._need_check_tokens() and self.sleep_for_rate:
                 logger.debug("GitHub APP with {} ID: access token expired, creating new one".format(self.github_app_id))
                 self._choose_best_api_token()
-
-        response = super().fetch(url, payload, headers, method, stream, auth)
-
+        
         if not self.from_archive:
-            if self._need_check_tokens():
-                self._choose_best_api_token()
-            else:
-                self.update_rate_limit(response)
-
+            self.sleep_for_rate_limit()
+        
+        
+        response = super().fetch(url, payload, headers, method, stream, auth)
+        
+        self.update_rate_limit(response)
+    
         return response
 
     def fetch_items(self, path, payload):

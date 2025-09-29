@@ -44,7 +44,7 @@ from .errors import ParseError
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_DATETIME = datetime.datetime(1970, 1, 1, 0, 0, 0,
+DEFAULT_DATETIME = datetime.datetime(1971, 1, 1, 0, 0, 0,
                                      tzinfo=dateutil.tz.tzutc())
 DEFAULT_LAST_DATETIME = datetime.datetime(2100, 1, 1, 0, 0, 0,
                                           tzinfo=dateutil.tz.tzutc())
